@@ -1,0 +1,168 @@
+---
+title: "Spatial Accessibility"
+author: "Muchemi"
+date: "2025-03-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(sf)
+library(here)
+library(raster)
+library(gdistance)
+library(malariaAtlas)
+library(ggplot2)
+library(terra)
+
+```
+
+
+```{r}
+# Load all facilities data 
+lamu.all.hf.01 <- st_read("D:/Accessibility_Data/Spatial_Accessibility_TC/TC_Hf.shp")  
+lamu.all.hf <- st_transform(lamu.all.hf.01, crs = 4326)
+
+# Read administrative boundaries for Lamu County
+lamu.01 <- st_read("D:/Accessibility_Data/Spatial_Accessibility_TC/TC_Bndry.shp")
+lamu <- st_transform(lamu.01, crs = 4326)
+
+# Load population raster for Lamu
+lamu.pop <- raster("D:/Accessibility_Data/Spatial_Accessibility_TC/TC_Pop.tif")
+
+# Retrieve friction surfaces for the analysis area
+friction <- malariaAtlas::getRaster(
+  surface = "Global friction surface enumerating land-based travel speed with access to motorized transport for a nominal year 2019",
+  shp = lamu
+)
+
+# Convert friction surface to a transition matrix
+friction_raster <- raster(friction)
+T1 <- gdistance::transition(friction_raster, function(x) 1/mean(x), 8) 
+T.GC <- gdistance::geoCorrection(T1)
+```
+
+
+
+```{r}
+# Initialize a dataframe to store results for each facility's catchment area
+catchment_results <- list()
+
+# Iterate over each remaining facility to compute individual catchment areas
+for (i in 1:nrow(lamu.all.hf)) {
+  
+  # Extract coordinates for the current facility
+  coords_matrix <- st_coordinates(lamu.all.hf[i, ])
+  
+  # Compute the accumulated cost (travel time raster) for the current facility
+  access_raster <- gdistance::accCost(T.GC, coords_matrix)
+  
+  # Convert RasterLayer (from raster) to SpatRaster (from terra)
+  access_raster_spat <- rast(access_raster)
+  
+  # Categorize the travel time into specific categories
+  travel_time_categories <- cut(values(access_raster_spat),
+                                 breaks = c(-Inf, 30, 60, 120, 180, Inf),
+                                 labels = c("<30", "31-60", "61-120", "121-180", ">180"),
+                                 right = TRUE)
+  
+  # Add the categories as a new layer to the raster (creating a categorical layer)
+  access_raster_spat_cat <- access_raster_spat
+  values(access_raster_spat_cat) <- travel_time_categories
+  
+  # Convert the categorized SpatRaster to polygons
+  access_polygon <- as.polygons(access_raster_spat_cat, dissolve = FALSE)
+  
+  # Convert the result to an SF object
+  access_sf <- st_as_sf(access_polygon)
+  
+  # Set the CRS explicitly 
+  st_crs(access_sf) <- st_crs(4326)
+  
+  # Rename the layer column for clarity
+  colnames(access_sf)[colnames(access_sf) == "layer"] <- "access_level"
+  
+  # Add a facility ID or name to the catchment polygons for identification
+  access_sf$facility_id <- lamu.all.hf$code[i]
+  access_sf$facility_name <- lamu.all.hf$official_name[i]  # Assuming 'official_name' exists
+  
+  # Initialize a column to store population counts for each category
+  access_sf$population_count <- NA
+  
+  # Calculate population within each category of the catchment areas
+  for (category in unique(access_sf$access_level)) {
+    # Select polygons that match the category
+    category_geom <- access_sf[access_sf$access_level == category, ]
+    
+    # Extract population within the category's polygon
+    pop_in_category <- extract(lamu.pop, category_geom, fun = sum, na.rm = TRUE)
+    
+    # Assign the summed population to the corresponding polygons
+    access_sf$population_count[access_sf$access_level == category] <- pop_in_category
+  }
+  
+  # Append the results to the main list (or dataframe)
+  catchment_results[[i]] <- access_sf
+  
+  #Save the catchment area polygons as shapefile for the current facility
+  output_file_path <- paste0("D:/Accessibility_Data/Spatial_Accessibility_TC/catchment_area_", 
+                             lamu.all.hf$code[i], ".shp") 
+  
+  # Save catchment area shapefile for the current facility
+  st_write(access_sf, output_file_path)
+}
+```
+
+
+
+```{r CONVERSION TO CSV}
+
+# Combine all individual catchment areas into one dataframe 
+combined_catchment_areas <- do.call(rbind, catchment_results)
+
+# Reproject to a projected CRS for dissolving (UTM)
+projected_crs <- st_crs(32737)
+
+# Reproject the geometry to the new CRS
+combined_catchment_areas_projected <- st_transform(combined_catchment_areas, projected_crs)
+
+# Step 2: DISSOLVE the polygons by 'facility_id' and 'access_level' and SUM the population_count
+dissolved_catchment_areas <- combined_catchment_areas_projected %>%
+  group_by(facility_id, access_level) %>%
+  summarise(
+    population_count = sum(population_count, na.rm = TRUE),  # Sum the population for each category
+    geometry = st_union(geometry)  # Merge polygons for each group
+  ) %>%
+  st_as_sf()
+
+# Step 3: Reproject back to geographic CRS (WGS84) after dissolving the polygons
+dissolved_catchment_areas <- st_transform(dissolved_catchment_areas, crs = 4326)
+
+# Step 4: Add lat and long for the centroid of each dissolved catchment area
+dissolved_catchment_areas_df <- as.data.frame(dissolved_catchment_areas)
+
+# Reproject to a planar CRS before computing centroids to avoid incorrect results
+dissolved_catchment_areas_projected <- st_transform(dissolved_catchment_areas, crs = projected_crs)
+
+# # Calculate centroids in the projected CRS (accurate)
+# centroids <- st_centroid(dissolved_catchment_areas_projected)
+# dissolved_catchment_areas_df$lat <- st_coordinates(centroids)[,2]  # Latitude
+# dissolved_catchment_areas_df$long <- st_coordinates(centroids)[,1]  # Longitude
+
+#Remove the geometry column before exporting to CSV 
+dissolved_catchment_areas_df <- subset(dissolved_catchment_areas_df, select = -geometry)
+
+# Write the data to a CSV
+output_csv_path <- "D:/Accessibility_Data/Spatial_Accessibility_TC/dissolved_catchment_areas_by_category.csv"
+write.csv(dissolved_catchment_areas_df, output_csv_path, row.names = FALSE)
+
+#  Display columns of the output CSV
+cat("Columns of the dissolved catchment area data after processing:\n")
+print(colnames(dissolved_catchment_areas_df))  
+
+```
