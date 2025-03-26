@@ -25,15 +25,15 @@ library(terra)
 
 ```{r}
 # Load all facilities data 
-lamu.all.hf.01 <- st_read("D:/Accessibility_Data/Spatial_Accessibility_TC/TC_Hf.shp")  
+lamu.all.hf.01 <- st_read("/Users/annekariithi/Documents/Accessibility/TC_Hf.shp")  
 lamu.all.hf <- st_transform(lamu.all.hf.01, crs = 4326)
 
 # Read administrative boundaries for Lamu County
-lamu.01 <- st_read("D:/Accessibility_Data/Spatial_Accessibility_TC/TC_Bndry.shp")
+lamu.01 <- st_read("/Users/annekariithi/Documents/Accessibility/TC_Bndry.shp")
 lamu <- st_transform(lamu.01, crs = 4326)
 
 # Load population raster for Lamu
-lamu.pop <- raster("D:/Accessibility_Data/Spatial_Accessibility_TC/TC_Pop.tif")
+lamu.pop <- raster("/Users/annekariithi/Documents/Accessibility/TC_Pop.tif")
 
 # Retrieve friction surfaces for the analysis area
 friction <- malariaAtlas::getRaster(
@@ -89,7 +89,7 @@ for (i in 1:nrow(lamu.all.hf)) {
   
   # Add a facility ID or name to the catchment polygons for identification
   access_sf$facility_id <- lamu.all.hf$code[i]
-  access_sf$facility_name <- lamu.all.hf$official_name[i]  # Assuming 'official_name' exists
+  access_sf$facility_name <- lamu.all.hf$offcl_n[i]  # Assuming 'official_name' exists
   
   # Initialize a column to store population counts for each category
   access_sf$population_count <- NA
@@ -110,8 +110,7 @@ for (i in 1:nrow(lamu.all.hf)) {
   catchment_results[[i]] <- access_sf
   
   #Save the catchment area polygons as shapefile for the current facility
-  output_file_path <- paste0("D:/Accessibility_Data/Spatial_Accessibility_TC/catchment_area_", 
-                             lamu.all.hf$code[i], ".shp") 
+  output_file_path <- paste0("/Users/annekariithi/Documents/Accessibility/output/catchment_area_",lamu.all.hf$code[i], ".shp") 
   
   # Save catchment area shapefile for the current facility
   st_write(access_sf, output_file_path)
@@ -158,7 +157,7 @@ dissolved_catchment_areas_projected <- st_transform(dissolved_catchment_areas, c
 dissolved_catchment_areas_df <- subset(dissolved_catchment_areas_df, select = -geometry)
 
 # Write the data to a CSV
-output_csv_path <- "D:/Accessibility_Data/Spatial_Accessibility_TC/dissolved_catchment_areas_by_category.csv"
+output_csv_path <- "/Users/annekariithi/Documents/Accessibility/dissolved_catchment_areas_by_category.csv"
 write.csv(dissolved_catchment_areas_df, output_csv_path, row.names = FALSE)
 
 #  Display columns of the output CSV
