@@ -25,15 +25,15 @@ library(terra)
 
 ```{r}
 # Load all facilities data 
-lamu.all.hf.01 <- st_read("/Users/annekariithi/Documents/Accessibility/TC_Hf.shp")  
+lamu.all.hf.01 <- st_read("/Users/annekariithi/Documents/Accessibility/lamu_county/L_Hf.shp")  
 lamu.all.hf <- st_transform(lamu.all.hf.01, crs = 4326)
 
 # Read administrative boundaries for Lamu County
-lamu.01 <- st_read("/Users/annekariithi/Documents/Accessibility/TC_Bndry.shp")
+lamu.01 <- st_read("/Users/annekariithi/Documents/Accessibility/lamu_county/L_Bndry.shp")
 lamu <- st_transform(lamu.01, crs = 4326)
 
 # Load population raster for Lamu
-lamu.pop <- raster("/Users/annekariithi/Documents/Accessibility/TC_Pop.tif")
+lamu.pop <- raster("/Users/annekariithi/Documents/Accessibility/lamu_county/L_Pop.tif")
 
 # Retrieve friction surfaces for the analysis area
 friction <- malariaAtlas::getRaster(
@@ -67,8 +67,8 @@ for (i in 1:nrow(lamu.all.hf)) {
   
   # Categorize the travel time into specific categories
   travel_time_categories <- cut(values(access_raster_spat),
-                                 breaks = c(-Inf, 30, 60, 120, 180, Inf),
-                                 labels = c("<30", "31-60", "61-120", "121-180", ">180"),
+                                 breaks = c(0, 30, 60, 120, 180),
+                                 labels = c("0-30", "31-60", "61-120", "121-180"),
                                  right = TRUE)
   
   # Add the categories as a new layer to the raster (creating a categorical layer)
@@ -110,7 +110,7 @@ for (i in 1:nrow(lamu.all.hf)) {
   catchment_results[[i]] <- access_sf
   
   #Save the catchment area polygons as shapefile for the current facility
-  output_file_path <- paste0("/Users/annekariithi/Documents/Accessibility/output/catchment_area_",lamu.all.hf$code[i], ".shp") 
+  output_file_path <- paste0("/Users/annekariithi/Documents/Accessibility/lamu2_output/catchment_area_",lamu.all.hf$code[i], ".shp") 
   
   # Save catchment area shapefile for the current facility
   st_write(access_sf, output_file_path)
@@ -157,7 +157,7 @@ dissolved_catchment_areas_projected <- st_transform(dissolved_catchment_areas, c
 dissolved_catchment_areas_df <- subset(dissolved_catchment_areas_df, select = -geometry)
 
 # Write the data to a CSV
-output_csv_path <- "/Users/annekariithi/Documents/Accessibility/dissolved_catchment_areas_by_category.csv"
+output_csv_path <- "/Users/annekariithi/Documents/Accessibility/lamu_county/lamu_outputdissolved_catchment_areas_by_category.csv"
 write.csv(dissolved_catchment_areas_df, output_csv_path, row.names = FALSE)
 
 #  Display columns of the output CSV
