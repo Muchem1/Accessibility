@@ -21,7 +21,7 @@ rasters <- listRaster(printed = FALSE)
 fric_idx <- grep("friction surface", rasters$title, ignore.case = TRUE)
 rasters[fric_idx, c("dataset_id","title","pub_year")]
 
-# assuming rasters$dataset_id[fric_idx] == "2019_friction_surface_v1_Decompressed"
+
 friction <- malariaAtlas::getRaster(
   surface    = rasters$dataset_id[fric_idx],
   shp        = Tc_Bndry,
@@ -31,17 +31,17 @@ friction <- malariaAtlas::getRaster(
 
 
 
-# Convert the SpatRaster 'friction' to a RasterLayer.
+# Convert the SpatRaster to a RasterLayer.
 friction_raster <- raster(friction)
 
-# 3. Load the population raster (each cell has a population count).
+# 3. Load the population raster 
 population <- raster("D:/Accessibility_Data/county/L_Pop.tif")
 
-# --- NEW: compute total population of the entire study area ---
+# compute total population of the entire study area 
 total_population <- cellStats(population, sum, na.rm = TRUE)
 cat("Total population (study area):", total_population, "\n\n")
 
-# 4. Load health facility locations (ensure CRS matches the friction/population data).
+# 4. Load health facility locations 
 health_facilities <- st_read("D:/Accessibility_Data/Laikipia_Analysis/obstetric_gynaecological_YES.shp")
 
 # 5. Create a transition object from the friction surface.
@@ -100,32 +100,4 @@ classified_raster <- mask_0_30 * 30 +
   mask_121_180 * 180 + 
   mask_180 * 181
 
-# Define colors and labels matching the example image
-colors <- c("#4daf4a", "#ffff33", "#ff7f00", "#e41a1c", "#a65628")  # Green, Yellow, Orange, Red, Brown
-labels <- c(
-  sprintf("≤30   (%s%%)", percent_0_30),
-  sprintf("31–60 (%s%%)", percent_31_60),
-  sprintf("61–120(%s%%)", percent_61_120),
-  sprintf("121–180(%s%%)", percent_121_180),
-  sprintf(">180  (%s%%)", percent_180)
-)
 
-# 13. Plot the map
-par(mar = c(0, 0, 2, 0))
-plot(classified_raster, 
-     col    = colors,
-     breaks = c(0.5, 1.5, 2.5, 3.5, 4.5, 5.5),
-     legend = FALSE,
-     main   = "Health Services Accessibility by Motorized Travel Time",
-     axes   = FALSE, box = FALSE)
-
-# Add legend
-legend("bottomleft",
-       legend = labels,
-       fill   = colors,
-       title  = "Travel Minutes to Nearest Facility (Population %)",
-       bty    = "n",
-       cex    = 0.8)
-
-# Add scale bar
-raster::scalebar(200000, type = "bar", divs = 2, below = "km", label = c(0, 100, 200))
